@@ -1,0 +1,667 @@
+# <a name="scheduling"></a> Laravel Scheduling
+## Latar belakang topik
+
+Cron Job sebelumnya biasa ditemukan pada server yang menggunakan sistem operasi Linux, akan tetapi juga terdapat implementasinya pada framework Laravel. Konfigurasi entri cron sendiri dapat digunakan untuk menjadwalkan tugas-tugas seperti mengirim email atau mengunduh file dari internet di waktu tertentu. Walau begitu, terkadang menulis script yang dijadwalkan di Cron memang agak menyakitkan. Selain sering error, kita pun sulit untuk mengetahui error apa yang muncul apabila ada kesalahan pada saat menjadwalkan script kita. Jadwal tugas tidak lagi berada dalam source control. Untuk melihat entri cron yang ada atau menambah entri cron yang baru, perlu dilakukan SSH ke server.
+
+Laravel menyediakan pendekatan dalam mengelola tugas-tugas terjadwal. Command scheduler milik Laravel memungkinkan penentuan jadwal command dalam aplikasi Laravel. Penggunaan scheduler ini hanya memerlukan satu entri cron dalam Server. Jadwal tugas didefinisikan dalam method **schedule** milik file **app/Console/Kernel.php**
+
+## Konsep-konsep
+
+Semua tugas yang terjadwal maupun akan dijadwalkan dapat didefinisikan dalam method **schedule** dari class **App\Console\Kernel**.
+```php
+<?php
+
+namespace App\Console;
+
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
+
+class Kernel extends ConsoleKernel
+{
+    /**
+     * Define the application's command schedule.
+     *
+     * @param  \Illuminate\Console\Scheduling\Schedule  $schedule
+     * @return void
+     */
+    protected function schedule(Schedule $schedule)
+    {
+        // $schedule->command('inspire')->hourly();
+    }
+ ```
+
+Terdapat beberapa cara untuk melakukan penjadwalan pada Scheduler yaitu dengan: 
+1. Menggunakan callable/closure
+2. Memanggil artisan command
+3. Memanggil job
+4. Mengeksekusi shell command
+
+Di bawah ini terdapat beberapa contoh penerapan method **schedule** dalam Laravel.
+
+### Mendefinisikan Schedule dengan Callable/Closure
+
+Dalam contoh ini akan dijadwalkan closure tiap tengah malam. Dalam closure ini akan dieksekusi query database untuk membersihkan sebuah tabel. Cara untuk memanggil callable yang ada yaitu: 
+```php
+        $schedule->call(function () {
+            DB::table('nama_tabel')->delete();
+        })->daily();
+```
+
+Pada contoh di atas, dia akan memanggil sebuah fungsi untuk menghapus data pada tabel yang dispesifikkan pada sebuah database. Setelah melakukan callable, yang dapat dilakukan adalah mendefiniskan frekuensi tugas ini akan dijadwalkan, yang dapat dilihat di bawah. Dengan memanggil ->daily(), berarti fungsi akan berjalan setiap hari pada tengah malam. 
+
+Contoh lengkap: 
+
+```php
+namespace App\Console;
+
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
+use Illuminate\Support\Facades\DB;
+
+class Kernel extends ConsoleKernel
+{
+    /**
+     * The Artisan commands provided by your application.
+     *
+     * @var array
+     */
+    protected $commands = [
+        //
+    ];
+
+    /**
+     * Define the application's command schedule.
+     *
+     * @param  \Illuminate\Console\Scheduling\Schedule  $schedule
+     * @return void
+     */
+    protected function schedule(Schedule $schedule)
+    {
+        $schedule->call(function () {
+            DB::table('nama_tabel')->delete();
+        })->daily();
+    }
+}
+```
+
+Artisan command **schedule:list** dapat digunakan untuk melihat semua tugas yang terjadwal serta melihat kapan tugas tersebut akan dijalankan.
+
+```
+php artisan schedule:list
+```
+
+#### Mendefinisikan Schedule dengan Artisan Command
+Pendefinisian schedule dengan artisan command menjadi pendekatan yang lebih disukai daripada pendekatan Closure karena memberikan organisasi kode yang lebih baik dan reusability pada saat yang sama.
+
+Berikut adalah contoh penggunaan artisan command yang tertera pada dokumentasi Laravel:
+```php
+use App\Console\Commands\SendEmailsCommand;
+
+$schedule->command('emails:send Taylor --force')->daily();
+
+$schedule->command(SendEmailsCommand::class, ['Taylor', '--force'])->daily();
+```
+
+Struktur dari pemanggilan command untuk dijadwalkan pada Scheduler mirip dengan Closure, akan tetapi menggunakan syntax `->command()`, dan command akan didefinisi di dalam mirip seperti pemanggilan command pada terminal. Jangan lupa, definisikan juga frekuensi penjadwalan tugas. 
+
+Untuk contoh implementasi sederhana yang dapat digunakan yaitu seperti yang telah disediakan oleh Laravel sebelumnya. 
+```
+$schedule->command('inspire')->hourly();
+```
+
+Tugas yang dilakukan pada command di atas yaitu mengeluarkan output kalimat-kalimat memotivasi secara random setiap jamnya. Untuk mengecek command-command yand dimiliki, dapat mengecek pada terminal:
+
+```php 
+php artisan list
+```
+Selain itu, kita juga dapat membuat command-command sendiri sesuai yang kita butuhkan. Akan dijelaskan suatu implementasi berupa mengirim email di bagian bawah. 
+
+
+#### Schedule Queued Jobs
+Contoh yang lain yaitu dengan menjadwalkan Queued Job seperti berikut:
+
+```php
+use App\Jobs\Heartbeat;
+
+$schedule->job(new Heartbeat)->everyFiveMinutes();
+```
+
+```php
+use App\Jobs\Heartbeat;
+
+// Dispatch the job to the "heartbeats" queue on the "sqs" connection...
+$schedule->job(new Heartbeat, 'heartbeats', 'sqs')->everyFiveMinutes();
+```
+
+
+#### Schedule Shell Command
+Selain itu, Laravel juga memungkinkan Anda untuk menjadwalkan perintah shell sehingga Anda dapat menjalankan aplikasi eksternal juga. 
+
+```php
+$schedule->exec('node /home/forge/script.js')->daily();
+```
+
+### Schedule Frequency Option
+
+Terdapat banyak frekuensi task schedule yang bisa diberikan kepada sebuah tugas. S
+
+| Method                            | Description                                                   |
+| --------------------------------- | ------------------------------------------------------------- |
+| ->cron('* * * * *');              | Run tugas pada jadwal cron khusus                             |
+| ->everyMinute();                  | Run tugas setiap menit                                        |
+| ->everyTwoMinutes();              | Run tugas setiap dua menit                                    |
+| ->everyThreeMinutes();	        | Run tugas setiap tiga menit                                   |
+| ->everyFourMinutes();	            | Run tugas setiap empat menit                                  |
+| ->everyFiveMinutes();	            | Run tugas setiap lima menit                                   |
+| ->everyTenMinutes();              | Run tugas setiap sepuluh minutes                              |
+| ->everyFifteenMinutes();	        | Run tugas setiap lime belas minutes                           |
+| ->everyThirtyMinutes();	        | Run tugas setiap tiga puluh minutes                           |
+| ->hourly();                       | Run tugas setiap jam                                          |
+| ->hourlyAt(17);                   | Run tugas setiap jam 17 menit lewat jam                       |
+| ->everyTwoHours();                | Run tugas setiap dua jam                                      |
+| ->everyThreeHours();              | Run tugas setiap tiga hours                                   |
+| ->everyFourHours();               | Run tugas setiap empat hours                                  |
+| ->everySixHours();                | Run tugas setiap enam hours                                   |
+| ->daily();                        | Run tugas setiap hari at midnight                             |
+| ->dailyAt('13:00');               | Run tugas setiap hari at 13:00                                |
+| ->twiceDaily(1, 13);              | Run tugas setiap hari at 1:00 & 13:00                         |
+| ->weekly();                       | Run tugas setiap hari Minggu at 00:00                         |
+| ->weeklyOn(1, '8:00');            | Run tugas setiap minggu pada Senin at 8:00                    |
+| ->monthly();                      | Run tugas pada hari pertama setiap bulan pada 00:00           |
+| ->monthlyOn(4, '15:00');          | Run tugas setiap bulan pada tanggal 4 di 15:00                |
+| ->twiceMonthly(1, 16, '13:00');   | Run tugas setiap bulan pada tanggal 1 dan 16 di 13:00         |
+| ->lastDayOfMonth('15:00');        | Run tugas pada hari terakhir bulan di 15:00                   |
+| ->quarterly();                    | Run tugas pada hari pertama setiap per empat tahun pada 00:00 |
+| ->yearly();                       | Run tugas pada hari pertama setiap tahun pada 00:00           |
+| ->yearlyOn(6, 1, '17:00');        | Run tugas setiap tahun pada 1 Juni di 17:00                   |
+| ->timezone('America/New_York');   | Mengatur zona waktu dari tugas                                |
+
+Method-method ini dapat digabung dengan constraint tambahan untuk membuat jadwal yang lebih disesuaikan pada hari-hari tertentu dalam satu minggu.
+
+```php
+// Run once per week on Monday at 1 PM...
+$schedule->call(function () {
+    //
+})->weekly()->mondays()->at('13:00');
+
+// Run hourly from 8 AM to 5 PM on weekdays...
+$schedule->command('foo')
+          ->weekdays()
+          ->hourly()
+          ->timezone('America/Chicago')
+          ->between('8:00', '17:00');
+```
+
+Berikut adalah daftar constraint tambahan yang dapat digunakan:
+
+| Method                                  | Description                                             |
+| --------------------------------------- | ------------------------------------------------------- |
+| ->weekdays();                           | Membatasi tugas hanya pada hari kerja                   |
+| ->weekends();                           | Membatasi tugas hanya pada akhir pekan                  |
+| ->sundays();                            | Membatasi tugas hanya pada hari Minggu                  |
+| ->mondays();                            | Membatasi tugas hanya pada hari Senin                   |
+| ->tuesdays();                           | Membatasi tugas hanya pada hari Selasa                  |
+| ->wednesdays();                         | Membatasi tugas hanya pada hari Rabu                    |
+| ->thursdays();                          | Membatasi tugas hanya pada hari Kamis                   |
+| ->fridays();                            | Membatasi tugas hanya pada hari Jumat                   |
+| ->saturdays();                          | Membatasi tugas hanya pada hari Sabtu                   |
+| ->days(array|mixed);                    | Membatasi tugas hanya pada hari tertentu                |
+| ->between($startTime, $endTime);        | Membatasi tugas hanya pada startTime dan endTime        |
+| ->unlessBetween($startTime, $endTime);  | Membatasi tugas tidak pada startTime and endTime        |
+| ->when(Closure);                        | Membatasi tugas hanya berdasarkan truth test            |
+| ->environments($env);                   | Membatasi tugas hanya pada environment tertentu         |
+
+### Days Constraint
+
+```php
+$schedule->command('emails:send')
+                ->hourly()
+                ->days([0, 3]);
+```
+
+```php
+use Illuminate\Console\Scheduling\Schedule;
+
+$schedule->command('emails:send')
+                ->hourly()
+                ->days([Schedule::SUNDAY, Schedule::WEDNESDAY]);
+```
+
+### Between Time Constraint
+
+```php
+$schedule->command('emails:send')
+                    ->hourly()
+                    ->between('7:00', '22:00');
+```
+
+```php
+$schedule->command('emails:send')
+                    ->hourly()
+                    ->unlessBetween('23:00', '4:00');
+```
+
+### Truth Test Constraint
+
+```php
+$schedule->command('emails:send')->daily()->when(function () {
+    return true;
+});
+```
+
+```php
+$schedule->command('emails:send')->daily()->skip(function () {
+    return true;
+});
+```
+
+### Environment Constraint
+
+```php
+$schedule->command('emails:send')
+            ->daily()
+            ->environments(['staging', 'production']);
+```
+
+### Timezone
+
+```php
+$schedule->command('report:generate')
+         ->timezone('America/New_York')
+         ->at('2:00')
+```
+
+```php
+protected function scheduleTimezone()
+{
+    return 'America/Chicago';
+}
+```
+
+### Mencegah Task Overlap
+
+Secara default, tugas terjadwal akan dijalankan meskipun instance dari tugas tersebut masih berjalan. Untuk mencegah ini, dapat digunakan method **withoutOverlapping**
+
+```php
+$schedule->command('emails:send')->withoutOverlapping();
+```
+
+Method ini berguna dalam kasus dimana terdapat banyak tugas dengan waktu eksekusi yang bervariasi. Tidak diperlukan prediksi terhadap seberapa lama tugas bekerja.
+Jike diperlukan, method ini dapat ditentukan berapa menit yang diperlukan agar kunci withoutOverlapping dilepas. Secara default, kunci berakhir setelah 24 jam.
+
+```php
+$schedule->command('emails:send')->withoutOverlapping(10);
+```
+
+### Menjalankan Task Pada Satu Server
+
+Jika scheduler berjalan pada beberapa server, tugas terjadwal dapat dibatasi agar hanya berjalan di satu server. Sebagai contoh, asumsikan terdapat tugas yang membuat laporan setiap Jumat malam. Jika task scheduler berjalan pada tiga server pekerja, tugas akan berjalan pada ketiga server dan membuat laporan tiga kali.
+
+Untuk menandakan bahwa tugas hanya berjalan di satu server, tugas terjadwal harus didefinisikan dengan method **onOneServer**. Server pertama yang mendapat tugas ini akan mencegah server lain dalam menjalankan tugas yang sama di waktu yang sama.
+
+```php
+$schedule->command('report:generate')
+                ->fridays()
+                ->at('17:00')
+                ->onOneServer();
+```
+
+### Background Task
+
+Secara default, beberapa tugas terjadwal di waktu yang sama akan dijalankan secara sekuensial berdasarkan urutan yang didefinisikan di method **schedule**. Jika terdapat tugas yang berjalan lama, tugas-tugas selanjutnya akan dijalankan lebih lambat daripada yang diperkirakan. Method **runInBackground** dapat digunakan untuk menjalankan tugas di background sehingga semua tugas dapat dijalankan bersamaan.
+
+```php
+$schedule->command('analytics:report')
+         ->daily()
+         ->runInBackground();
+```
+
+### Maintenance Mode
+
+Tugas terjadwal tidak akan berjalan ketika aplikasi sedang berada dalam *maintenance mode*. Hal ini agar tugas-tugas diharapkan tidak mengganggu proses pemeliharaan yang belum selesai dilakukan dalam server. Namun, tugas dapat dipaksa untuk tetap berjalan dalam maintenance mode jika diperlukan. Tugas dapat diberi method **evenInMaintenanceMode** agar dapat berjalan meskipun server sedang dalam masa pemeliharaan.
+
+```php
+$schedule->command('emails:send')->evenInMaintenanceMode();
+```
+
+## Menjalankan Scheduler
+### Menjalankan Scheduler Pada Server
+
+Artisan command **schedule:run** dapat digunakan untuk mengevaluasi semua tugas terjadwal dan menentukan apakah tugas tersebut perlu dijalankan sesuai waktu milik server.
+
+Ketika menjalankan Laravel Scheduler, diperlukan satu entri konfigurasi cron pada server yang menjalankan **schedule:run** setiap menit. Servis seperti Laravel Forge dapat digunakan untuk membantu mengelola entri cron.
+
+```
+* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+### Menjalankan Scheduler Secara Lokal
+Dikarenakan untuk saat ini, kita lebih sering akan menjalankan run secara lokal, maka command yang dapat digunakan yaitu: 
+```php 
+php artisan schedule:work
+```
+Command ini dapat digunakan untuk menjalankan scheduler tiap menit sampai command dihentikan (terminate). Jadi apabila command ini tidak kita jalankan, scheduler kita tidak akan berjalan dengan sendirinya. 
+
+
+## Task Output
+
+Laravel Scheduler menyediakan beberapa **method** untuk bekerja dengan output yang dibuat oleh tugas terjadwal. Metode-metode ini bermanfaat apabila kita akan melakukan running tugas-tugas yang banyak dan ingin mendapatkan log-log dari scheduler yang sudah kita lakukan. 
+
+Method **sendOutputTo** dapat mengirimkan output ke sebuah file.
+
+```php
+$schedule->command('emails:send')
+         ->daily()
+         ->sendOutputTo($filePath);
+```
+
+Method **appendOutputTo** dapat menambahkan output pada sebuah file.
+
+```php
+$schedule->command('emails:send')
+         ->daily()
+         ->appendOutputTo($filePath);
+```
+
+Method **emailOutputTo** dapat mengirimkan email ke sebuah email address. Perlu dilakukan konfigurasi terhadap Laravel Email Service sebelum menjalankan method ini.
+
+```php
+$schedule->command('report:generate')
+         ->daily()
+         ->sendOutputTo($filePath)
+         ->emailOutputTo('taylor@example.com');
+```
+
+Method **emailOutputOnFailure** akan mengirimkan email ketika scheduled Artisan atau system command diakhiri (terminate) dengan non-zero exit code.
+
+```php
+$schedule->command('report:generate')
+         ->daily()
+         ->emailOutputOnFailure('taylor@example.com');
+```
+
+## Task Hook
+
+Dengan method **before** dan **after**, kode dapat diatur untuk dijalankan sebelum dan sesudah tugas terjadwal dieksekusi.
+
+```php
+$schedule->command('emails:send')
+         ->daily()
+         ->before(function () {
+             // The task is about to execute...
+         })
+         ->after(function () {
+             // The task has executed...
+         });
+```
+
+Method **onSuccess** dan **onFailure** dapat mengatur kode agar dapat dijalankan ketika tugas terjadwal berhasil atau gagal dijalankan.
+
+```php
+$schedule->command('emails:send')
+         ->daily()
+         ->onSuccess(function () {
+             // The task succeeded...
+         })
+         ->onFailure(function () {
+             // The task failed...
+         });
+```
+
+Jika terdapat output, isi output dapat diakses dari **after**, **onSuccess**, dan **onFailure** menggunakan instance use Illuminate\Support\Stringable sebagai argumen **$output**.
+
+```php
+use Illuminate\Support\Stringable;
+
+$schedule->command('emails:send')
+         ->daily()
+         ->onSuccess(function (Stringable $output) {
+             // The task succeeded...
+         })
+         ->onFailure(function (Stringable $output) {
+             // The task failed...
+         });
+```
+
+### Ping URL
+
+Method **pingBefore** an **thenPing** dapat digunakan untuk untuk secara otomatis ping URL yang diberikan sebelum atau sesudah task dijalankan. Method ini berguna dalam mengingatkan servis luar, seperti Envoyer, bahwa tugas telah dimulai atau selesai.
+
+```php
+$schedule->command('emails:send')
+         ->daily()
+         ->pingBefore($url)
+         ->thenPing($url);
+```
+
+Method **pingBeforeIf** an **thenPingIf** digunakan untuk ping URL jika kondisi yang diberikan return nilai true
+
+```php
+$schedule->command('emails:send')
+         ->daily()
+         ->pingBeforeIf($condition, $url)
+         ->thenPingIf($condition, $url);
+```
+
+Method **pingOnSuccess** dan **pingOnFailure** hanya akan berjalan ketika tugas berhasil atau gagal berjalan.
+
+```php
+$schedule->command('emails:send')
+         ->daily()
+         ->pingOnSuccess($successUrl)
+         ->pingOnFailure($failureUrl);
+```
+
+Ping method memerlukan library Guzzle HTTP.
+```
+composer require guzzlehttp/guzzle
+```
+
+
+## Implementasi Laravel Scheduler untuk Mengirimkan Email
+Dalam aplikasi ini, kita akan mengirim satu email ke pemilik yang memberi tahu kita jumlah pengguna yang terdaftar hari ini. 
+
+
+### Langkah Pertama: Membuat Command
+Command di bawah dapat dirun pada terminal. 
+```php 
+php artisan make:command RegisteredUsers --command=registered:users
+```
+
+Command tersebut akan membuat sebuah class baru bernama RegisteredUsers pada file dengan nama yang sama di `app/Console/Commands` folder. 
+
+Kemudian pada file `RegisteredUsers.php` tersebut dapat diganti description (yang akan muncul pada list command) dan juga fungsi `handle()`, yang akan mengeksekusi command yang telah kita definisikan kerjanya. 
+```php
+   /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Send an email of registered users';
+```
+
+```php
+ /**
+     * Execute the console command.
+     *
+     * @return mixed
+     */
+    public function handle()
+    {
+        $totalUsers = \DB::table('users')
+                  ->whereRaw('Date(created_at) = CURDATE()')
+                  ->count();
+    }
+```
+
+Dikarenakan command ini akan digunakan dalam Scheduler kita, maka kita harus mendaftarkan command pada file Kernel. 
+```php
+ /**
+     * The Artisan commands provided by your application.
+     *
+     * @var array
+     */
+    protected $commands = [
+        'App\Console\Commands\RegisteredUsers',
+    ];
+```
+
+### Langkah Kedua: Membuat Mailable Class 
+Pada terminal, run command di bawah: 
+```php
+php artisan make:mail SendMailable
+```
+
+Kemudian, kita dapat mendefinisikan apa yang akan dikirim pada email tersebut. 
+```php
+<?php
+
+namespace App\Mail;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Contracts\Queue\ShouldQueue;
+
+class SendMailable extends Mailable
+{
+    use Queueable, SerializesModels;
+    public $count;
+
+    /**
+     * Create a new message instance.
+     *
+     * @return void
+     */
+    public function __construct($count)
+    {
+        $this->count = $count;
+    }
+
+    /**
+     * Build the message.
+     *
+     * @return $this
+     */
+    public function build()
+    {
+        return $this->view('emails.registeredcount');
+    }
+}
+```
+Selain itu, kita juga harus mendefinisikan view yang akan digunakan sebagai template pada `resources  >>  views  >> emails  >>  registeredcount.blade.php`
+
+```php
+<div>
+    Total number of registered users for today is: {{ $count }}
+</div>
+```
+
+Kemudian tambahkan class Mailable pada file `RegisteredUsers.php`:
+
+```php
+// RegisteredUsers.php
+
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\SendMailable;
+
+class RegisteredUsers extends Command
+{
+    /**
+     * The name and signature of the console command.
+     *
+     * @var string
+     */
+    protected $signature = 'registered:users';
+
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Send an email of registered users';
+
+    /**
+     * Create a new command instance.
+     *
+     * @return void
+     */
+    public function __construct()
+    {
+        parent::__construct();
+    }
+
+    /**
+     * Execute the console command.
+     *
+     * @return mixed
+     */
+    public function handle()
+    {
+        $totalUsers = \DB::table('users')
+                  ->whereRaw('Date(created_at) = CURDATE()')
+                  ->count();
+        Mail::to('email yang ingin dikirim')->send(new SendMailable($totalUsers));
+    }
+}
+```
+
+Untuk mengirim email pada contoh ini, menggunakan <a href="https://mailtrap.io/">Mailtrap</a>. 
+
+#### Konfigurasi Mailtrap
+Setelah melakukan sign up pada Mailtrap, Mailtrap akan menyediakan details seperti berikut: 
+```
+Host:	smtp.mailtrap.io
+Port:	25 or 465 or 2525
+Username:	// some username
+Password:	// some password
+Auth:	PLAIN, LOGIN and CRAM-MD5
+TLS:	Optional
+```
+
+Details ini dapat kita gunakan inside file `.env` kita. 
+```
+MAIL_DRIVER=smtp
+MAIL_HOST=smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME= // some username
+MAIL_PASSWORD= // some password
+MAIL_ENCRYPTION=null
+```
+
+### Langkah Ketiga: Mendefinisikan Command pada Task Scheduler
+```php
+protected function schedule(Schedule $schedule)
+{
+    $schedule->command('registered:users')
+        ->daily();
+}
+```
+
+Dan kemudian untuk melakukan run dapat menggunakan
+```php
+php artisan schedule:work
+```
+
+Yang harus diingat dari penggunaan Mailtrap ini sendiri, email tidak akan terkirim secara aktual ke email yang telah didefinisikan pada class Mailable, akan tetapi pada dashboard Mailtrap, akan ada tulisan/bukti bahwa email dapat terkirim. Mailtrap sendiri adalah sebuah testing tool dan tidak didesain untuk mengirimkan email ke email-email aktual. 
+
+Apabila ingin mengirim email secara aktual, dapat menggunakan external tool lain yang ada. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
